@@ -13,5 +13,5 @@ add_executable(grad_aff_tests
 
 target_link_libraries(grad_aff_tests PRIVATE
     grad_aff
-    Catch2::Catch2
+    Catch2::Catch2WithMain
 )

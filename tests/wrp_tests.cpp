@@ -1,6 +1,4 @@
-#pragma once
-
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include "grad_aff/wrp/wrp.h"
 
@@ -36,8 +34,8 @@ TEST_CASE("read Altis in memory", "[read-altis-memory]") {
 
     ifs.seekg(0, std::ios_base::beg);
     ifs.read(reinterpret_cast<char*>(&data[0]), fileSize);
-  
+
     grad_aff::Wrp test_wrp_obj(data);
     test_wrp_obj.readWrp();
-    
+
 }
