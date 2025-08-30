@@ -1,0 +1,3 @@
+[submodule "lzokay"]
+	path = lzokay
+	url = https://github.com/AxioDL/lzokay
