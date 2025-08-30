@@ -2,6 +2,7 @@
 
 #ifdef GRAD_AFF_USE_OPENSSL
 #include <openssl/sha.h>
+#include <openssl/evp.h>
 #endif
 
 #include <boost/algorithm/string.hpp>
@@ -73,20 +74,15 @@ bool grad_aff::Pbo::checkHash() {
     is->seekg(0);
     auto rawPboData = readBytes(*is, preHashPos);
 
-    SHA_CTX context;
-    if (!SHA1_Init(&context)) {
-        throw std::runtime_error("SHA1 Init failed!");
-    }
-
-    std::vector<uint8_t> calculatedHash(20);
-    
-    if (!SHA1_Update(&context, reinterpret_cast<const uint8_t*>(rawPboData.data()), rawPboData.size())) {
-        throw std::runtime_error("SHA1 Update failed!");
-    }
-
-    if (!SHA1_Final(calculatedHash.data(), &context)) {
-        throw std::runtime_error("SHA1 Final failed!");
-    }
+    EVP_MD_CTX *mdctx = EVP_MD_CTX_new();
+    const EVP_MD *md = EVP_sha1();
+    unsigned char md_value[EVP_MAX_MD_SIZE];
+    unsigned int md_len;
+    EVP_DigestInit_ex(mdctx, md, NULL);
+    EVP_DigestUpdate(mdctx, rawPboData.data(), rawPboData.size());
+    EVP_DigestFinal_ex(mdctx, md_value, &md_len);
+    EVP_MD_CTX_free(mdctx);
+    std::vector<uint8_t> calculatedHash(md_value, md_value + md_len);
 
     return (calculatedHash == hash);
 }
@@ -110,7 +106,7 @@ void grad_aff::Pbo::extractPbo(fs::path outPath)
 }
 
 
-void grad_aff::Pbo::extractSingleFile(fs::path entryName, fs::path outPath, bool fullPath) 
+void grad_aff::Pbo::extractSingleFile(fs::path entryName, fs::path outPath, bool fullPath)
 {
     if (entries.size() == 0) {
         this->readPbo(false);
@@ -149,7 +145,7 @@ void grad_aff::Pbo::readSingleData(fs::path searchEntry) {
     if (entries.size() == 0) {
         this->readPbo(false);
     }
-    
+
     is->seekg(this->dataPos);
 
     std::streamoff targetDataOffset = 0;
@@ -212,20 +208,18 @@ void grad_aff::Pbo::writePbo(fs::path outPath) {
     is->seekg(0);
     auto rawPboData = readBytes(*is, (std::streamsize)size - 1);
 
-    SHA_CTX context;
-    if (!SHA1_Init(&context)) {
-        throw std::runtime_error("SHA1 Init failed");
-    }
+    EVP_MD_CTX *mdctx;
+    const EVP_MD *md;
+    unsigned char md_value[EVP_MAX_MD_SIZE];
+    unsigned int md_len;
 
-    std::vector<uint8_t> calculatedHash(20);
-
-    if (!SHA1_Update(&context, reinterpret_cast<const unsigned char*>(rawPboData.data()), rawPboData.size())) {
-        throw std::runtime_error("SHA1 Update failed");
-    }
-
-    if (!SHA1_Final(reinterpret_cast<unsigned char*>(calculatedHash.data()), &context)) {
-        throw std::runtime_error("SHA1 Final failed");
-    }
+    md = EVP_sha1();
+    mdctx = EVP_MD_CTX_new();
+    EVP_DigestInit_ex(mdctx, md, NULL);
+    EVP_DigestUpdate(mdctx, rawPboData.data(), rawPboData.size());
+    EVP_DigestFinal_ex(mdctx, md_value, &md_len);
+    EVP_MD_CTX_free(mdctx);
+    std::vector<uint8_t> calculatedHash(md_value, md_value + md_len);
 #else
     std::vector<uint8_t> calculatedHash(20, 0);
 #endif
