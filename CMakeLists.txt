@@ -144,6 +144,10 @@ if(BUILD_TESTS)
     add_subdirectory("tests")
 endif()
 
+# --- Build CLI ---
+add_subdirectory(cli)
+
+
 # --- Installation Rules ---
 install(TARGETS grad_aff
     RUNTIME DESTINATION bin
