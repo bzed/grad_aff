@@ -45,7 +45,7 @@ void grad_aff::Odol::readOdol(bool withLods) {
     readModelInfo();
     readAnimations();
 
-    
+
     for (auto i = 0; i < modelInfo.nLods; i++) {
         startAddressOfLods.push_back(readBytes<uint32_t>(*is));
     }
@@ -225,7 +225,7 @@ void grad_aff::Odol::readModelInfo(bool peekLodType) {
     modelInfo.invMass = readBytes<float_t>(*is);
     modelInfo.armor = readBytes<float_t>(*is);
     modelInfo.invArmor = readBytes<float_t>(*is);
-    
+
     if (version >= 72) {
         modelInfo.explosionShielding = readBytes<float_t>(*is);
     }
@@ -422,7 +422,7 @@ void grad_aff::Odol::readAnimations() {
             AnimBones animBones;
             animBones.skeletonBoneNameIndex = readBytes<int32_t>(*is);
 
-            if (animBones.skeletonBoneNameIndex != -1 && 
+            if (animBones.skeletonBoneNameIndex != -1 &&
                 animationClasses[j].animType->type != AnimTransformTypeEnum::DIRECT && animationClasses[j].animType->type != AnimTransformTypeEnum::HIDE) {
                 animBones.axisPos = readXYZTriplet(*is);
                 animBones.axisDir = readXYZTriplet(*is);
@@ -710,7 +710,7 @@ ODOLv4xLod grad_aff::Odol::readLod() {
 
     lod.nTokens = readBytes<uint32_t>(*is);
     for (auto i = 0; i < lod.nTokens; i++) {
-        lod.tokens.insert({ readZeroTerminatedString(*is), readZeroTerminatedString(*is) });
+        lod.tokens.insert(std::make_pair(readZeroTerminatedString(*is), readZeroTerminatedString(*is)));
     }
 
     lod.nFrames = readBytes<uint32_t>(*is);

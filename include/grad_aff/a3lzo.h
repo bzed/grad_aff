@@ -5,6 +5,7 @@
 #include <vector>
 #include <fstream>
 #include <cassert>
+#include <cstdint>
 
 #define M2_MAX_OFFSET   0x0800
 

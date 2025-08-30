@@ -179,7 +179,7 @@ std::vector<uint8_t> grad_aff::readCompressed(std::istream& is, size_t expectedS
 
 template<typename T>
 std::vector<T> grad_aff::readCompressedArray(std::istream& is, size_t expectedSize, bool useCompressionFlag) {
-    
+
     if (expectedSize == 0)
         return {};
     auto n = readBytes<uint32_t>(is);
@@ -496,7 +496,7 @@ size_t grad_aff::readLzssSized(std::istream& is, std::vector<uint8_t>& out, size
             int num8 = num7 + j;
             if ((long)(num7 + 1) > (long)((size_t)num))
             {
-                throw new std::exception("LZSS overflow");
+                throw std::runtime_error("LZSS overflow");
             }
             while (j <= num8)
             {
