@@ -38,3 +38,5 @@ out/
 lib/
 test_data/
 CMakeSettings.json
+
+build/*
