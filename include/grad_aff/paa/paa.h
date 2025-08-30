@@ -7,7 +7,7 @@
 #include "../grad_aff.h"
 #include "../StreamUtil.h"
 
-#include "MipMap.h"
+#include "mipmap.h"
 #include "Tagg.h"
 #include "Palette.h"
 
@@ -53,7 +53,7 @@ namespace grad_aff {
         Paa();
         Paa(std::string filename);
         Paa(std::vector<uint8_t> data);
-        
+
         void readPaa();
         void readImage(fs::path filename);
 

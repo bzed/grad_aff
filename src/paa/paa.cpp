@@ -1,4 +1,4 @@
-#include "grad_aff/paa/Paa.h"
+#include "grad_aff/paa/paa.h"
 
 #include <squish.h>
 #include <lzo/lzo1x.h>
@@ -90,7 +90,7 @@ void grad_aff::Paa::readPaa() {
     if (palette.dataLength > 0) {
         palette.data = readBytes(*is, palette.dataLength);
     }
-    
+
     // MipMaps
     while (peekBytes<uint16_t>(*is) != 0) {
         MipMap mipmap;
@@ -165,7 +165,7 @@ void grad_aff::Paa::readImage(fs::path filename) {
     mipMap.data.resize((size_t)mipMap.width * (size_t)mipMap.height * 4);
     inImage.get_pixels(ROI(0, mipMap.width, 0, mipMap.height), TypeDesc::UINT8, mipMap.data.data());
     mipMap.dataLength = mipMap.data.size();
-    
+
     mipMaps.push_back(mipMap);
     calculateMipmapsAndTaggs();
 }
@@ -189,7 +189,7 @@ void grad_aff::Paa::writeImage(std::string filename, int level) {
     outImage->open(filename, imgSpec);
     outImage->write_image(TypeDesc::UINT8, mipMaps[level].data.data());
     outImage->close();
-    
+
 }
 #endif
 
@@ -246,7 +246,7 @@ void grad_aff::Paa::calculateMipmapsAndTaggs() {
     averageGreen /= pixelCount;
     averageBlue /= pixelCount;
     averageAlpha /= pixelCount;
-    
+
     // Write average Color Tagg
     Tagg taggAvg;
     taggAvg.signature = "GGATCGVA";
@@ -315,7 +315,7 @@ void grad_aff::Paa::writePaa(std::string filename, TypeOfPaX typeOfPaX) {
         }
         magicNumber = 0xff01;
     }
-    
+
     // compress with lzo, if needed
     if (encodedMipMaps[0].width > 128) {
         if (lzo_init() == LZO_E_OK) {
@@ -324,14 +324,14 @@ void grad_aff::Paa::writePaa(std::string filename, TypeOfPaX typeOfPaX) {
                 encodedMipMaps[i].lzoCompressed = true;
 
                 size_t out_len = 0;
-                          
+
                 std::vector<unsigned char> outputData(encodedMipMaps[i].data.size() * 2);
                 std::vector<unsigned char> workMemory(LZO1X_MEM_COMPRESS);
-                
+
                 if (lzo1x_1_compress(reinterpret_cast<const uint8_t*>(encodedMipMaps[i].data.data()), encodedMipMaps[i].dataLength, outputData.data(), &out_len, workMemory.data()) != LZO_E_OK) {
                     throw std::runtime_error("LZO Compression failed");
                 }
-                
+
                 encodedMipMaps[i].data = std::vector<uint8_t>(outputData.data(), outputData.data() + out_len);
                 encodedMipMaps[i].dataLength = out_len;
 
@@ -377,7 +377,7 @@ void grad_aff::Paa::writePaa(std::string filename, TypeOfPaX typeOfPaX) {
         counter++;
     }
     taggOffs.dataLength = taggOffs.data.size();
-    
+
     // Write everything
     std::ofstream ofs(filename, std::ios::binary);
 

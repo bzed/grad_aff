@@ -1,4 +1,5 @@
 #include "grad_aff/StreamUtil.h"
+#include <cstring>
 
 /*
     Read

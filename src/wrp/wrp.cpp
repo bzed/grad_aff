@@ -1,6 +1,7 @@
 #include "grad_aff/wrp/wrp.h"
 
 #include <lzo/lzo1x.h>
+#include <algorithm>
 
 grad_aff::Wrp::Wrp(std::string wrpFilename) {
     this->is = std::make_shared<std::ifstream>(wrpFilename, std::ios::binary);
@@ -48,7 +49,7 @@ std::shared_ptr<grad_aff::GridBlockTree> grad_aff::Wrp::readGridBlock(std::istre
 
 void grad_aff::Wrp::readWrp()
 {
-    
+
     // TODO Checks
     this->wrpTypeName = readString(*is, 4);
     if(this->wrpTypeName != "OPRW") {
@@ -78,7 +79,7 @@ void grad_aff::Wrp::readWrp()
     }
 
     this->rvmatLayerIndex = readGridBlock(*is, 4);
-    
+
     this->randomClutter = readLZOCompressed(*is, mapSize).first;
     this->compressedBytes = readLZOCompressed(*is, mapSize).first;
     this->elevation = readLZOCompressed<float_t>(*is, (size_t)mapSize * 4).first;
@@ -271,5 +272,5 @@ void grad_aff::Wrp::readWrp()
         }
     }
     mapInfo.shrink_to_fit();
-    
+
 }
