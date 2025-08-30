@@ -1,235 +1,153 @@
-﻿# CMakeList.txt : Top-level CMake project file, do global configuration
-# and include sub-projects here.
+# Top-level CMake project file for grad_aff
 #
-cmake_minimum_required (VERSION 3.8)
+# Configures the project, dependencies, and build options.
 
-project ("grad_aff")
+cmake_minimum_required(VERSION 3.16)
 
-include(ExternalProject)
+project(grad_aff LANGUAGES CXX)
+
+# --- Submodule Integration ---
+# Build the lzokay submodule from source.
+add_subdirectory(lzokay)
+
+# --- Standard Includes ---
 include(CheckIncludeFileCXX)
 
-option(USE_STATIC_LINKING "Static Build" ON)
-option(BUILD_TESTS "Build Tests" ON)
-option(BUILD_WITH_OIIO "Build with OpenImageIO" OFF)
-option(BUILD_WITH_OPENSSL "Build with OpenSSL" OFF)
-option(GRAD_AFF_ENABLE_PARALLELISM "Enable Parallelism" ON)
+# --- Build Options ---
+option(BUILD_TESTS "Build the project tests" ON)
+option(BUILD_WITH_OIIO "Build with OpenImageIO support" OFF)
+option(BUILD_WITH_OPENSSL "Build with OpenSSL for PBO hash checking" OFF)
+option(GRAD_AFF_ENABLE_PARALLELism "Enable parallel processing features" ON)
 
-if(NOT DEFINED CMAKE_BUILD_TYPE OR "${CMAKE_BUILD_TYPE}" STREQUAL "")
-    set(CMAKE_BUILD_TYPE "Release")
-endif()
-
-if(BUILD_WITH_OIIO)
-    add_definitions(-DGRAD_AFF_USE_OIIO)
-endif()
-
-if(BUILD_WITH_OPENSSL)
-    add_definitions(-DGRAD_AFF_USE_OPENSSL)
-endif()
-
-if(USE_STATIC_LINKING)
-    add_definitions(-DOIIO_STATIC_DEFINE)
-    set(LIB_TYPE STATIC)
-else()
-    set(LIB_TYPE SHARED)
-endif()
-
+# --- Project Configuration ---
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if((${CMAKE_BUILD_TYPE} STREQUAL "Debug" AND NOT MINGW))
-    set(DEBUG_SUFFIX "d")
-else()
-    set(DEBUG_SUFFIX "")
+# Set a default build type if none is specified
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-# LZO
-find_package(lzokay CONFIG REQUIRED)
+# --- Dependencies ---
+find_package(pegtl CONFIG REQUIRED)
+find_package(tsl-ordered-map CONFIG REQUIRED)
+find_package(Boost 1.70.0)
 
-# DXT
+# DXT Compression Library
 find_path(SQUISH_INCLUDE_DIR squish.h)
-find_library(SQUISH_LIBRARY squish${DEBUG_SUFFIX})
+find_library(SQUISH_LIBRARY squish)
+if(NOT SQUISH_INCLUDE_DIR OR NOT SQUISH_LIBRARY)
+    message(FATAL_ERROR "libsquish not found. Please install it or provide its path.")
+endif()
+# Create an IMPORTED target for easier linking
+add_library(Libsquish::Libsquish UNKNOWN IMPORTED)
+set_target_properties(Libsquish::Libsquish PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${SQUISH_INCLUDE_DIR}"
+    IMPORTED_LOCATION "${SQUISH_LIBRARY}"
+)
 
-# Image
+# --- Optional Dependencies ---
 if(BUILD_WITH_OIIO)
-   
-   # Let OIIO find external libsquish
-    set (LIBSQUISH_INCLUDES ${SQUISH_INCLUDE_DIR})
-    set (LIBSQUISH_LIBRARIES ${SQUISH_LIBRARY})
-
-    find_package(OpenEXR CONFIG)
-    find_package(PNG MODULE)
-
-    if (NOT TARGET Libsquish::Libsquish)
-        add_library(Libsquish::Libsquish UNKNOWN IMPORTED)
-        set_target_properties(Libsquish::Libsquish PROPERTIES
-           INTERFACE_INCLUDE_DIRECTORIES "${LIBSQUISH_INCLUDES}")
-
-        set_property(TARGET Libsquish::Libsquish APPEND PROPERTY
-            IMPORTED_LOCATION "${LIBSQUISH_LIBRARIES}")
-    endif ()
-
-    if(MINGW)
-        find_package(PkgConfig REQUIRED)
-        pkg_check_modules(OIIO_PKG REQUIRED IMPORTED_TARGET OpenImageIO)
-
-        if(USE_STATIC_LINKING)
-            pkg_check_modules(OPENEXR_PKG REQUIRED IMPORTED_TARGET OpenEXR)
-            pkg_check_modules(ZLIB_PKG REQUIRED IMPORTED_TARGET zlib)
-            pkg_check_modules(TIFF_PKG REQUIRED IMPORTED_TARGET libtiff-4)
-            pkg_check_modules(JPEG_PKG REQUIRED IMPORTED_TARGET libjpeg)
-            pkg_check_modules(PNG_PKG REQUIRED IMPORTED_TARGET libpng)
-        endif()
-    else()
-        find_package(OpenImageIO CONFIG REQUIRED)
+    find_package(OpenImageIO CONFIG)
+    if(NOT OpenImageIO_FOUND)
+        message(FATAL_ERROR "BUILD_WITH_OIIO was enabled, but OpenImageIO was not found.")
     endif()
 endif()
-
-# Parsing
-find_package(pegtl CONFIG REQUIRED)
 
 if(BUILD_WITH_OPENSSL)
-    # SHA1 PBO
-    find_package(OpenSSL REQUIRED)
-endif()
-
-if(USE_STATIC_LINKING)
-    set(Boost_USE_STATIC_LIBS ON)
-    set(Boost_USE_MULTITHREADED ON)
-    set(Boost_USE_STATIC_RUNTIME ON)
-endif()
-
-if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    set(Boost_USE_DEBUG_LIBS ON)
-    set(Boost_USE_RELEASE_LIBS OFF)
-    set(Boost_USE_DEBUG_RUNTIME ON)
-else()
-    set(Boost_USE_DEBUG_LIBS OFF)
-    set(Boost_USE_RELEASE_LIBS ON)
-    set(Boost_USE_DEBUG_RUNTIME OFF)
-endif()
-
-find_package(Boost 1.70.0 COMPONENTS)
-
-find_package(tsl-ordered-map CONFIG REQUIRED)
-
-include_directories(${SQUISH_INCLUDE_DIR})
-if(BUILD_WITH_OIIO)
-    if(MINGW)
-        include_directories(${OIIO_PKG_INCLUDE_DIRS}/..)
-
-        if(USE_STATIC_LINKING)
-            link_directories(${OIIO_PKG_STATIC_LIBRARY_DIRS})
-        endif()
-    else()
-        include_directories(${OIIO_INCLUDE_DIR})
-    endif()
-endif()
-include_directories(${Boost_INCLUDE_DIRS})
-include_directories("include")
-
-file(GLOB_RECURSE GRAD_AFF_HEADERS ${PROJECT_SOURCE_DIR}/include/*.h)
-file(GLOB_RECURSE GRAD_AFF_SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
-
-add_library (grad_aff ${LIB_TYPE} ${GRAD_AFF_SOURCES} ${GRAD_AFF_HEADERS})# "src/grad_aff.cpp" "src/p3d/odol.cpp" "src/paa/Paa.cpp" "src/StreamUtil.cpp" "src/GridBlockTree.cpp" "src/a3lzo.cpp" "src/pbo/Pbo.cpp" "src/rap/rap.cpp" "src/rap/RapParser.cpp" "src/wrp/wrp.cpp")
-target_compile_definitions (grad_aff PUBLIC GRAD_AFF_EXPORTS)
-if(MSVC)
-    if(USE_STATIC_LINKING)
-        if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-            target_compile_options(grad_aff PUBLIC "/MTd")
-        else()
-            target_compile_options(grad_aff PUBLIC "/MT")
-        endif()
-    else()
-        if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-            target_compile_options(grad_aff PUBLIC "/MDd")
-        else()
-            target_compile_options(grad_aff PUBLIC "/MD")
-        endif()
+    find_package(OpenSSL)
+    if(NOT OPENSSL_FOUND)
+        message(FATAL_ERROR "BUILD_WITH_OPENSSL was enabled, but OpenSSL was not found.")
     endif()
 endif()
 
-if(MSVC AND NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    target_compile_options(grad_aff PUBLIC "/O2")
-endif()
-
-target_include_directories(grad_aff PUBLIC ${PROJECT_SOURCE_DIR}/include)
-target_include_directories(grad_aff PUBLIC ${OPENIMAGEIO_INCLUDE_DIR})
-
-if(BUILD_WITH_OIIO)
-    if(MINGW)
-        if(USE_STATIC_LINKING)
-            target_link_libraries(grad_aff PUBLIC ${OIIO_PKG_STATIC_LIBRARIES} ${OIIO_PKG_STATIC_LIBRARIES}_Util)
-            target_link_libraries(grad_aff PUBLIC PkgConfig::OPENEXR_PKG)
-            target_link_libraries(grad_aff PUBLIC PkgConfig::ZLIB_PKG)
-            target_link_libraries(grad_aff PUBLIC PkgConfig::TIFF_PKG)
-            target_link_libraries(grad_aff PUBLIC PkgConfig::JPEG_PKG)
-            target_link_libraries(grad_aff PUBLIC PkgConfig::PNG_PKG)
-            target_link_libraries(grad_aff PUBLIC ws2_32)
-        else()
-            target_link_libraries(grad_aff PUBLIC PkgConfig::OIIO_PKG)
-        endif()
-    else()
-        target_link_libraries(grad_aff PUBLIC Libsquish::Libsquish OpenImageIO::OpenImageIO OpenImageIO::OpenImageIO_Util)
-    endif()
-endif()
-target_link_libraries(grad_aff PUBLIC ${SQUISH_LIBRARY})
-target_link_libraries(grad_aff PUBLIC ${Boost_LIBRARIES})
-target_link_libraries(grad_aff PUBLIC taocpp::pegtl)
-target_link_libraries(grad_aff PUBLIC tsl::ordered_map)
-target_link_libraries(grad_aff PUBLIC lzokay::lzokay)
-
+# --- Parallelism Configuration ---
 if(GRAD_AFF_ENABLE_PARALLELISM)
-    # Check for CPP 17 Parallelism
-    CHECK_INCLUDE_FILE_CXX(execution GRAD_AFF_CPP17_PAR)
+    check_include_file_cxx("execution" GRAD_AFF_CPP17_PAR)
 
     if(GRAD_AFF_CPP17_PAR)
         message(STATUS "Using C++17 parallelism")
         add_definitions(-DGRAD_AFF_USE_CPP17_PARALLELISM)
-        if(MINGW)
-            target_link_libraries(grad_aff PUBLIC tbb)
+        find_package(TBB) # Check for Intel TBB as a backend
+        if(TBB_FOUND)
+            message(STATUS "Linking against Intel TBB for C++17 parallelism backend.")
         endif()
     else()
-        # Check for OpenMP
         find_package(OpenMP)
-        if (OPENMP_FOUND)
+        if(OPENMP_FOUND)
             message(STATUS "Using OpenMP for parallelism")
             add_definitions(-DGRAD_AFF_USE_OPENMP)
-            target_link_libraries(grad_aff PUBLIC OpenMP::OpenMP_CXX)
         else()
-            # Check for CPP 11 Threads
-            CHECK_INCLUDE_FILE_CXX(thread GRAD_AFF_CPP11_THREADS)
             message(STATUS "Using C++11 threads for parallelism")
             add_definitions(-DGRAD_AFF_USE_CPP11_THREADS)
         endif()
     endif()
 endif()
 
-if(BUILD_WITH_OPENSSL)
-    target_link_libraries(grad_aff PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-endif()
 
-if(MINGW)
-    target_link_libraries(grad_aff PUBLIC stdc++fs)
-endif()
+# --- Library Target Definition ---
+file(GLOB_RECURSE GRAD_AFF_SOURCES "src/*.cpp")
+add_library(grad_aff SHARED ${GRAD_AFF_SOURCES})
 
-if(BUILD_TESTS)
-    # Include sub-projects.
-    add_subdirectory ("tests")
-endif()
-
-# Install
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/include/grad_aff" DESTINATION "include" FILES_MATCHING PATTERN "*.h")
-if(NOT USE_STATIC_LINKING AND MSVC)
-    install(FILES $<TARGET_PDB_FILE:grad_aff> DESTINATION bin OPTIONAL)
-
-    # Copy Dep DLLs
-    file(GLOB GRAD_AFF_DLSS "${CMAKE_CURRENT_BINARY_DIR}/*.dll")
-    install(FILES ${GRAD_AFF_DLSS} DESTINATION bin)
-endif()
-
-install(TARGETS grad_aff
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
+# --- Target Properties & Linking ---
+target_compile_definitions(grad_aff
+    PUBLIC
+        GRAD_AFF_EXPORTS
+    PRIVATE
+        $<$<BOOL:${BUILD_WITH_OIIO}>:GRAD_AFF_USE_OIIO>
+        $<$<BOOL:${BUILD_WITH_OPENSSL}>:GRAD_AFF_USE_OPENSSL>
 )
+
+target_include_directories(grad_aff
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries(grad_aff
+    PUBLIC
+        # Corrected: Link against the plain 'lzokay' target from the submodule
+        lzokay
+        taocpp::pegtl
+        tsl::ordered_map
+        Libsquish::Libsquish
+    PRIVATE
+        ${Boost_LIBRARIES}
+)
+
+# Link optional dependencies
+if(BUILD_WITH_OIIO)
+    target_link_libraries(grad_aff PRIVATE OpenImageIO::OpenImageIO OpenImageIO::OpenImageIO_Util)
+endif()
+
+if(BUILD_WITH_OPENSSL)
+    target_link_libraries(grad_aff PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+# Link parallelism libraries
+if(GRAD_AFF_ENABLE_PARALLELISM)
+    if(GRAD_AFF_CPP17_PAR AND TBB_FOUND)
+        target_link_libraries(grad_aff PRIVATE TBB::tbb)
+    elseif(OPENMP_FOUND)
+        target_link_libraries(grad_aff PRIVATE OpenMP::OpenMP_CXX)
+    endif()
+endif()
+
+# Add stdc++fs for filesystem support on older GCC versions
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+    target_link_libraries(grad_aff PRIVATE stdc++fs)
+endif()
+
+# --- Build Tests ---
+if(BUILD_TESTS)
+    add_subdirectory("tests")
+endif()
+
+# --- Installation Rules ---
+install(TARGETS grad_aff
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+)
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/include/grad_aff" DESTINATION "include")
