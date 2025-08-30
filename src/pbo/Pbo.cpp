@@ -1,7 +1,8 @@
 #include "grad_aff/pbo/Pbo.h"
 
 #ifdef GRAD_AFF_USE_OPENSSL
-#include <openssl/sha.h>
+// Use the modern EVP API for hashing, compatible with OpenSSL 3.x
+#include <openssl/evp.h>
 #endif
 
 #include <boost/algorithm/string.hpp>
@@ -29,8 +30,6 @@ void grad_aff::Pbo::readPbo(bool withData) {
     if (magicNumber != 0x56657273) {
         throw std::runtime_error("Invalid file/magic number");
     }
-
-    //pboName = filename;
 
     auto sixteenZeros = readBytes(*is, 16);
     while (peekBytes<uint8_t>(*is) != 0)
@@ -91,19 +90,34 @@ bool grad_aff::Pbo::checkHash() {
     is->seekg(0);
     auto rawPboData = readBytes(*is, preHashPos);
 
-    SHA_CTX context;
-    if (!SHA1_Init(&context)) {
-        throw std::runtime_error("SHA1 Init failed!");
+    // Updated SHA1 implementation using the OpenSSL 3.x EVP API
+    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+    if (!mdctx) {
+        throw std::runtime_error("Failed to create EVP_MD_CTX for hash check");
     }
 
-    std::vector<uint8_t> calculatedHash(20);
-    
-    if (!SHA1_Update(&context, reinterpret_cast<const uint8_t*>(rawPboData.data()), rawPboData.size())) {
-        throw std::runtime_error("SHA1 Update failed!");
+    if (1 != EVP_DigestInit_ex(mdctx, EVP_sha1(), NULL)) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("SHA1 Init failed during hash check!");
     }
 
-    if (!SHA1_Final(calculatedHash.data(), &context)) {
-        throw std::runtime_error("SHA1 Final failed!");
+    if (1 != EVP_DigestUpdate(mdctx, rawPboData.data(), rawPboData.size())) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("SHA1 Update failed during hash check!");
+    }
+
+    std::vector<uint8_t> calculatedHash(EVP_MD_size(EVP_sha1()));
+    unsigned int digest_len;
+
+    if (1 != EVP_DigestFinal_ex(mdctx, calculatedHash.data(), &digest_len)) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("SHA1 Final failed during hash check!");
+    }
+
+    EVP_MD_CTX_free(mdctx);
+
+    if (digest_len != hash.size()) {
+        return false; // Should not happen for SHA1 (20 bytes)
     }
 
     return (calculatedHash == hash);
@@ -256,20 +270,31 @@ void grad_aff::Pbo::writePbo(fs::path outPath) {
     pbo_read_stream.close();
 
 #ifdef GRAD_AFF_USE_OPENSSL
-    SHA_CTX context;
-    if (!SHA1_Init(&context)) {
-        throw std::runtime_error("SHA1 Init failed");
+    // Updated SHA1 implementation using the OpenSSL 3.x EVP API
+    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+    if (!mdctx) {
+        throw std::runtime_error("Failed to create EVP_MD_CTX for writing PBO");
     }
 
-    std::vector<uint8_t> calculatedHash(20);
-
-    if (!SHA1_Update(&context, reinterpret_cast<const unsigned char*>(buffer.data()), buffer.size())) {
-        throw std::runtime_error("SHA1 Update failed");
+    if (1 != EVP_DigestInit_ex(mdctx, EVP_sha1(), NULL)) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("SHA1 Init failed during PBO write");
     }
 
-    if (!SHA1_Final(reinterpret_cast<unsigned char*>(calculatedHash.data()), &context)) {
-        throw std::runtime_error("SHA1 Final failed");
+    if (1 != EVP_DigestUpdate(mdctx, buffer.data(), buffer.size())) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("SHA1 Update failed during PBO write");
     }
+    
+    std::vector<uint8_t> calculatedHash(EVP_MD_size(EVP_sha1()));
+    unsigned int digest_len;
+
+    if (1 != EVP_DigestFinal_ex(mdctx, calculatedHash.data(), &digest_len)) {
+        EVP_MD_CTX_free(mdctx);
+        throw std::runtime_error("SHA1 Final failed during PBO write");
+    }
+
+    EVP_MD_CTX_free(mdctx);
 #else
     std::vector<uint8_t> calculatedHash(20, 0);
 #endif
@@ -307,3 +332,4 @@ bool grad_aff::Pbo::hasEntry(fs::path entryPath) {
     }
     return entries.find(entryPath.string()) != entries.end();
 }
+
