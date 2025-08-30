@@ -1,8 +1,6 @@
-#pragma once
-
 #define CATCH_CONFIG_MAIN
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include "grad_aff/pbo/Pbo.h"
 
@@ -21,7 +19,7 @@ TEST_CASE("extract single file", "[single-extract-pbo]") {
     grad_aff::Pbo testPbo("A3.pbo");
     REQUIRE_NOTHROW(testPbo.readPbo());
     testPbo.extractPbo("unpack");
-    
+
     testPbo.extractSingleFile("data\\env_cloth_neutral_co.paa", "unpack2");
     testPbo.extractSingleFile("data\\env_cloth_neutral_co.paa", "unpack3", false);
 }

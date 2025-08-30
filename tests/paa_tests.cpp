@@ -1,8 +1,6 @@
-#pragma once
-
 #define CATCH_CONFIG_MAIN
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_all.hpp>
 
 #include "grad_aff/paa/paa.h"
 
