@@ -5,6 +5,8 @@
 #endif
 
 #include <boost/algorithm/string.hpp>
+#include <algorithm> // For std::replace
+
 namespace ba = boost::algorithm;
 
 grad_aff::Pbo::Pbo(std::string pboFilename) {
@@ -110,17 +112,23 @@ bool grad_aff::Pbo::checkHash() {
 
 void grad_aff::Pbo::extractPbo(fs::path outPath)
 {
-    outPath = outPath / pboName;
-    for (auto& entry : entries) {
+    for (auto& entryPair : entries) {
+        const auto& entry = entryPair.second;
 
-        auto pathWithoutFilename = (outPath / entry.second->filename).remove_filename();
+        // Normalize path separators from Windows '\' to the OS-preferred separator.
+        std::string normalizedPathStr = entry->filename.string();
+        std::replace(normalizedPathStr.begin(), normalizedPathStr.end(), '\\', fs::path::preferred_separator);
+        
+        fs::path finalOutPath = outPath / normalizedPathStr;
+        fs::path parentDirectory = finalOutPath.parent_path();
 
-        if (!fs::exists(pathWithoutFilename)) {
-            fs::create_directories(pathWithoutFilename);
+        // Create the directory structure if it doesn't already exist.
+        if (!parentDirectory.empty() && !fs::exists(parentDirectory)) {
+            fs::create_directories(parentDirectory);
         }
 
-        std::ofstream ofs(outPath / entry.second->filename, std::ios::binary);
-        writeBytes(ofs, entry.second->data);
+        std::ofstream ofs(finalOutPath, std::ios::binary);
+        ofs.write(reinterpret_cast<const char*>(entry->data.data()), entry->data.size());
         ofs.close();
     }
 }
@@ -132,28 +140,40 @@ void grad_aff::Pbo::extractSingleFile(fs::path entryName, fs::path outPath, bool
         this->readPbo(false);
     }
 
-    for (auto& entry : entries) {
-        if (entry.second->filename == entryName) {
-            auto writePath = outPath;
+    // Normalize the input entry name for comparison, as PBO paths are case-insensitive.
+    std::string lowerEntryName = ba::to_lower_copy(entryName.string());
+    std::replace(lowerEntryName.begin(), lowerEntryName.end(), '\\', '/'); // Internally compare with '/'
+
+    for (auto& entryPair : entries) {
+        auto& entry = entryPair.second;
+        
+        std::string currentEntryFilename = entry->filename.string();
+        std::replace(currentEntryFilename.begin(), currentEntryFilename.end(), '\\', '/');
+
+        if (currentEntryFilename == lowerEntryName) {
+            fs::path writePath;
             if (fullPath) {
-                writePath = outPath / pboName/ entry.second->filename;
+                // Construct the full path using the OS-preferred separator.
+                std::string normalizedPathStr = entry->filename.string();
+                std::replace(normalizedPathStr.begin(), normalizedPathStr.end(), '\\', fs::path::preferred_separator);
+                writePath = outPath / normalizedPathStr;
             }
             else {
-                writePath = outPath / fs::path(entry.second->filename).filename();
+                // Just use the filename component.
+                writePath = outPath / entry->filename.filename();
             }
 
-            if (entry.second->data.size() == 0) {
-                this->readSingleData(entry.second->filename);
+            if (entry->data.size() == 0) {
+                this->readSingleData(entry->filename);
             }
 
-            auto pathWithoutFilename = writePath;
-            pathWithoutFilename.remove_filename();
-            if (!fs::exists(pathWithoutFilename)) {
-                fs::create_directories(pathWithoutFilename);
+            auto parentDirectory = writePath.parent_path();
+            if (!parentDirectory.empty() && !fs::exists(parentDirectory)) {
+                fs::create_directories(parentDirectory);
             }
 
             std::ofstream ofs(writePath, std::ios::binary);
-            writeBytes(ofs, entry.second->data);
+            writeBytes(ofs, entry->data);
             ofs.close();
             return;
         }
@@ -168,26 +188,27 @@ void grad_aff::Pbo::readSingleData(fs::path searchEntry) {
     
     is->seekg(this->dataPos);
 
-    std::streamoff targetDataOffset = 0;
+    std::streamoff currentOffset = 0;
 
-    for (auto &entry : entries) {
-        if (entry.second->filename == searchEntry) {
-            is->seekg(targetDataOffset, std::ios::cur);
-            entry.second->data = readEntry(*entry.second);
+    for (auto &entryPair : entries) {
+        auto& entry = entryPair.second;
+        if (entry->filename == searchEntry) {
+            is->seekg(this->dataPos); // Go to the start of the data block
+            is->seekg(currentOffset, std::ios::cur); // Seek to the specific file's data
+            entry->data = readEntry(*entry);
+            return; // Found and read the file, so we can exit.
         }
-        else {
-            targetDataOffset += entry.second->dataSize;
-        }
+        currentOffset += entry->dataSize;
     }
 }
 
 void grad_aff::Pbo::writePbo(fs::path outPath) {
 
-    if (outPath != "" && fs::exists(outPath)) {
+    if (outPath != "" && !fs::exists(outPath)) {
         fs::create_directories(outPath);
     }
-    std::ofstream ofs(outPath / pboName, std::ios::binary);
-    //ofs.rdbuf();
+    std::ofstream ofs(outPath / (pboName + ".pbo"), std::ios::binary);
+
     // write magic
     writeBytes(ofs, { 0x00 });
     writeBytes<uint32_t>(ofs, 0x56657273);
@@ -205,29 +226,36 @@ void grad_aff::Pbo::writePbo(fs::path outPath) {
     writeBytes<uint8_t>(ofs, 0);
 
     // Write Header
-    for (auto& entry : entries) {
-        writeZeroTerminatedString(ofs, entry.second->filename.string());
-        writeBytes<uint32_t>(ofs, entry.second->packingMethod);
-        writeBytes<uint32_t>(ofs, entry.second->orginalSize);
-        writeBytes<uint32_t>(ofs, entry.second->reserved);
-        writeBytes<uint32_t>(ofs, entry.second->timestamp);
-        writeBytes<uint32_t>(ofs, entry.second->dataSize);
+    for (auto& entryPair : entries) {
+        auto& entry = entryPair.second;
+        writeZeroTerminatedString(ofs, entry->filename.string());
+        writeBytes<uint32_t>(ofs, entry->packingMethod);
+        writeBytes<uint32_t>(ofs, entry->orginalSize);
+        writeBytes<uint32_t>(ofs, entry->reserved);
+        writeBytes<uint32_t>(ofs, entry->timestamp);
+        writeBytes<uint32_t>(ofs, entry->dataSize);
     }
 
     for (int i = 0; i < 21; i++) {
         writeBytes(ofs, { 0x00 });
     }
 
-    for (auto& entry : entries) {
-        writeBytes(ofs, entry.second->data);
+    for (auto& entryPair : entries) {
+        writeBytes(ofs, entryPair.second->data);
     }
+    ofs.flush();
+    auto preHashPos = ofs.tellp();
+    
     writeBytes(ofs, { 0x00 });
     ofs.close();
-#ifdef GRAD_AFF_USE_OPENSSL
-    auto size = is->tellg();
-    is->seekg(0);
-    auto rawPboData = readBytes(*is, (std::streamsize)size - 1);
 
+    // Re-open to read for hashing
+    std::ifstream pbo_read_stream(outPath / (pboName + ".pbo"), std::ios::binary);
+    std::vector<char> buffer(preHashPos);
+    pbo_read_stream.read(buffer.data(), preHashPos);
+    pbo_read_stream.close();
+
+#ifdef GRAD_AFF_USE_OPENSSL
     SHA_CTX context;
     if (!SHA1_Init(&context)) {
         throw std::runtime_error("SHA1 Init failed");
@@ -235,7 +263,7 @@ void grad_aff::Pbo::writePbo(fs::path outPath) {
 
     std::vector<uint8_t> calculatedHash(20);
 
-    if (!SHA1_Update(&context, reinterpret_cast<const unsigned char*>(rawPboData.data()), rawPboData.size())) {
+    if (!SHA1_Update(&context, reinterpret_cast<const unsigned char*>(buffer.data()), buffer.size())) {
         throw std::runtime_error("SHA1 Update failed");
     }
 
@@ -245,7 +273,7 @@ void grad_aff::Pbo::writePbo(fs::path outPath) {
 #else
     std::vector<uint8_t> calculatedHash(20, 0);
 #endif
-    std::ofstream ofsHash(outPath / pboName, std::ios::binary | std::ios::app);
+    std::ofstream ofsHash(outPath / (pboName + ".pbo"), std::ios::binary | std::ios::app);
     writeBytes(ofsHash, calculatedHash);
     ofsHash.close();
 }
