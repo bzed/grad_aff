@@ -15,9 +15,9 @@ include(CheckIncludeFileCXX)
 
 # --- Build Options ---
 option(BUILD_TESTS "Build the project tests" ON)
-option(BUILD_WITH_OIIO "Build with OpenImageIO support" OFF)
+option(BUILD_WITH_OIIO "Build with OpenImageIO support" ON)
 option(BUILD_WITH_OPENSSL "Build with OpenSSL for PBO hash checking" OFF)
-option(GRAD_AFF_ENABLE_PARALLELism "Enable parallel processing features" ON)
+option(GRAD_AFF_ENABLE_PARALLELISM "Enable parallel processing features" ON)
 
 # --- Project Configuration ---
 set(CMAKE_CXX_STANDARD 17)
@@ -47,10 +47,20 @@ set_target_properties(Libsquish::Libsquish PROPERTIES
     IMPORTED_LOCATION "${SQUISH_LIBRARY}"
 )
 
+# --- Library Target Definition ---
+# This must be defined before it is configured in the optional dependency blocks below.
+file(GLOB_RECURSE GRAD_AFF_SOURCES "src/*.cpp")
+add_library(grad_aff SHARED ${GRAD_AFF_SOURCES})
+
+
 # --- Optional Dependencies ---
 if(BUILD_WITH_OIIO)
-    find_package(OpenImageIO CONFIG)
-    if(NOT OpenImageIO_FOUND)
+    # Use CMake's find_package in CONFIG mode, which looks for OpenImageIOConfig.cmake
+    find_package(OpenImageIO CONFIG REQUIRED)
+    if(OpenImageIO_FOUND)
+        message(STATUS "Using OpenImageIO.")
+        add_definitions(-DGRAD_AFF_USE_OIIO)
+    else()
         message(FATAL_ERROR "BUILD_WITH_OIIO was enabled, but OpenImageIO was not found.")
     endif()
 endif()
@@ -86,16 +96,12 @@ if(GRAD_AFF_ENABLE_PARALLELISM)
 endif()
 
 
-# --- Library Target Definition ---
-file(GLOB_RECURSE GRAD_AFF_SOURCES "src/*.cpp")
-add_library(grad_aff SHARED ${GRAD_AFF_SOURCES})
-
 # --- Target Properties & Linking ---
 target_compile_definitions(grad_aff
     PUBLIC
         GRAD_AFF_EXPORTS
     PRIVATE
-        $<$<BOOL:${BUILD_WITH_OIIO}>:GRAD_AFF_USE_OIIO>
+        # The OIIO definition is now handled explicitly above.
         $<$<BOOL:${BUILD_WITH_OPENSSL}>:GRAD_AFF_USE_OPENSSL>
 )
 
@@ -107,7 +113,6 @@ target_include_directories(grad_aff
 
 target_link_libraries(grad_aff
     PUBLIC
-        # Corrected: Link against the plain 'lzokay' target from the submodule
         lzokay
         taocpp::pegtl
         tsl::ordered_map
@@ -118,6 +123,7 @@ target_link_libraries(grad_aff
 
 # Link optional dependencies
 if(BUILD_WITH_OIIO)
+    # Link against the targets provided by the OpenImageIO CMake config
     target_link_libraries(grad_aff PRIVATE OpenImageIO::OpenImageIO OpenImageIO::OpenImageIO_Util)
 endif()
 
@@ -146,7 +152,6 @@ endif()
 
 # --- Build CLI ---
 add_subdirectory(cli)
-
 
 # --- Installation Rules ---
 install(TARGETS grad_aff
