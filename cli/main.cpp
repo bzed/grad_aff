@@ -17,11 +17,11 @@ void printHelp() {
     std::cout << "Usage: grad_aff_cli <command> [options]" << std::endl << std::endl;
     std::cout << "Commands:" << std::endl;
     std::cout << "  pbo info <pbo_file>                 Show information about a PBO file." << std::endl;
-    std::cout << "  pbo extract <pbo_file> <out_dir>         Extract a PBO file to the target directory." << std::endl;
+    std::cout << "  pbo extract <pbo_file> <out_dir>    Extract a PBO file to the target directory." << std::endl;
     std::cout << "  paa info <paa_file>                 Show information about a PAA file." << std::endl;
 #ifdef GRAD_AFF_USE_OIIO
-    std::cout << "  paa to-png <paa_file> <out_png>        Convert a PAA file to a PNG image." << std::endl;
-    std::cout << "  paa from-png <in_png> <out_paa>        Convert a PNG image to a PAA file." << std::endl;
+    std::cout << "  paa to-png <paa_file> <out_png>     Convert a PAA file to a PNG image." << std::endl;
+    std::cout << "  paa from-png <in_png> <out_paa>     Convert a PNG image to a PAA file." << std::endl;
 #endif
     std::cout << "  p3d info <p3d_file>                 Show information about a P3D model file." << std::endl;
     std::cout << "  wrp info <wrp_file>                 Show information about a WRP file." << std::endl;
@@ -69,7 +69,7 @@ void handlePbo(const std::vector<std::string>& args) {
                 const auto& entry = entryPair.second;
                 std::string entryPathStr = entry->filename.string();
                 std::replace(entryPathStr.begin(), entryPathStr.end(), '\\', fs::path::preferred_separator);
-                
+
                 fs::path finalOutPath = outDir / entryPathStr;
                 fs::path finalOutDir = finalOutPath.parent_path();
 
@@ -122,7 +122,7 @@ void handlePaa(const std::vector<std::string>& args) {
             }
             std::cout << "  Mipmap levels: " << paa.mipMaps.size() << std::endl;
             std::cout << "  Has transparency: " << (paa.hasTransparency ? "Yes" : "No") << std::endl;
-        } 
+        }
 #ifdef GRAD_AFF_USE_OIIO
         else if (action == "to-png") {
             if (args.size() < 4) {
@@ -166,7 +166,7 @@ void handleP3d(const std::vector<std::string>& args) {
         std::cerr << "Error: Input file does not exist: " << p3dFile << std::endl;
         return;
     }
-    
+
     try {
         if (action == "info") {
             grad_aff::Odol odol(p3dFile.string());
@@ -210,7 +210,7 @@ void handleWrp(const std::vector<std::string>& args) {
         std::cerr << "Error: Input file does not exist: " << wrpFile << std::endl;
         return;
     }
-    
+
     try {
         if (action == "info") {
             grad_aff::Wrp wrp(wrpFile.string());
@@ -257,4 +257,3 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
-
