@@ -50,18 +50,19 @@ set_target_properties(Libsquish::Libsquish PROPERTIES
 # --- Library Target Definition ---
 # This must be defined before it is configured in the optional dependency blocks below.
 file(GLOB_RECURSE GRAD_AFF_SOURCES "src/*.cpp")
-add_library(grad_aff SHARED ${GRAD_AFF_SOURCES})
+# Build the library as STATIC instead of SHARED.
+add_library(grad_aff STATIC ${GRAD_AFF_SOURCES})
 
 
 # --- Optional Dependencies ---
 if(BUILD_WITH_OIIO)
     # Use CMake's find_package in CONFIG mode, which looks for OpenImageIOConfig.cmake
     find_package(OpenImageIO CONFIG REQUIRED)
-    if(OpenImageIO_FOUND)
-        message(STATUS "Using OpenImageIO.")
-        add_definitions(-DGRAD_AFF_USE_OIIO)
-    else()
+    if(NOT OpenImageIO_FOUND)
         message(FATAL_ERROR "BUILD_WITH_OIIO was enabled, but OpenImageIO was not found.")
+    else()
+        # Add the compile definition here to ensure it's set correctly for all dependents.
+        target_compile_definitions(grad_aff PUBLIC GRAD_AFF_USE_OIIO)
     endif()
 endif()
 
@@ -118,31 +119,31 @@ target_link_libraries(grad_aff
         tsl::ordered_map
         Libsquish::Libsquish
     PRIVATE
-        ${Boost_LIBRARIES}
+        # Boost is header-only in this project, so no library linking is needed.
 )
 
 # Link optional dependencies
 if(BUILD_WITH_OIIO)
-    # Link against the targets provided by the OpenImageIO CMake config
-    target_link_libraries(grad_aff PRIVATE OpenImageIO::OpenImageIO OpenImageIO::OpenImageIO_Util)
+    # Link dependencies as PUBLIC so they are inherited by the CLI executable.
+    target_link_libraries(grad_aff PUBLIC OpenImageIO::OpenImageIO OpenImageIO::OpenImageIO_Util)
 endif()
 
 if(BUILD_WITH_OPENSSL)
-    target_link_libraries(grad_aff PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(grad_aff PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 # Link parallelism libraries
 if(GRAD_AFF_ENABLE_PARALLELISM)
     if(GRAD_AFF_CPP17_PAR AND TBB_FOUND)
-        target_link_libraries(grad_aff PRIVATE TBB::tbb)
+        target_link_libraries(grad_aff PUBLIC TBB::tbb)
     elseif(OPENMP_FOUND)
-        target_link_libraries(grad_aff PRIVATE OpenMP::OpenMP_CXX)
+        target_link_libraries(grad_aff PUBLIC OpenMP::OpenMP_CXX)
     endif()
 endif()
 
 # Add stdc++fs for filesystem support on older GCC versions
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-    target_link_libraries(grad_aff PRIVATE stdc++fs)
+    target_link_libraries(grad_aff PUBLIC stdc++fs)
 endif()
 
 # --- Build Tests ---
@@ -154,6 +155,7 @@ endif()
 add_subdirectory(cli)
 
 # --- Installation Rules ---
+# The RUNTIME component is ignored for STATIC libraries, but ARCHIVE and LIBRARY are correct.
 install(TARGETS grad_aff
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
