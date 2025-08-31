@@ -1,4 +1,4 @@
-# grad_add - linux edition by @bzed
+# grad_aff - linux edition by @bzed
 
 # CLI
 
